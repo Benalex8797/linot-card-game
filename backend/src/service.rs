@@ -8,8 +8,8 @@ use linera_sdk::{
 };
 use std::sync::Arc;
 
-use crate::state::{LinotState, MatchConfig, MatchData, MatchStatus};
-use linot::{Card, CardSuit, LinotAbi};
+use crate::state::{LinotState, MatchData, MatchStatus};
+use linot::{Card, CardSuit, LinotAbi, MatchConfig};
 
 /// GraphQL service for querying Linot match state
 pub struct LinotService {

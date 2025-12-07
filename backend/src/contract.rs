@@ -8,8 +8,10 @@ use linera_sdk::{
 };
 
 use crate::game_engine::{GameEngine, GameResult, SpecialEffect};
-use crate::state::{LinotState, MatchConfig, MatchData, MatchStatus, Player};
-use linot::{CardSuit, LinotAbi, LinotError, Message, Operation};
+use crate::state::{LinotState, MatchData, MatchStatus, Player};
+use linot::{CardSuit, GameEvent, LinotAbi, LinotError, MatchConfig, Message, Operation, GAME_EVENTS_STREAM, TURN_TIMEOUT_MICROS};
+
+use linera_sdk::linera_base_types::StreamName;
 
 pub struct LinotContract {
     state: LinotState,
@@ -26,7 +28,7 @@ impl Contract for LinotContract {
     type Message = Message;
     type Parameters = ();
     type InstantiationArgument = MatchConfig;
-    type EventValue = ();
+    type EventValue = GameEvent;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = LinotState::load(runtime.root_view_storage_context())
@@ -66,6 +68,9 @@ impl Contract for LinotContract {
             Operation::JoinMatch { nickname } => {
                 self.handle_join_match(caller, nickname).await
             }
+            Operation::JoinFromChain { host_chain_id, nickname } => {
+                self.handle_join_from_chain(host_chain_id, nickname).await
+            }
             Operation::StartMatch => {
                 self.handle_start_match(caller).await
             }
@@ -87,6 +92,9 @@ impl Contract for LinotContract {
             Operation::LeaveMatch => {
                 self.handle_leave_match(caller).await
             }
+            Operation::CheckTimeout => {
+                self.handle_check_timeout().await
+            }
             Operation::PlaceBet {
                 player_index: _,
                 amount: _,
@@ -104,30 +112,43 @@ impl Contract for LinotContract {
 
     async fn execute_message(&mut self, message: Self::Message) {
         let result = match message {
-            Message::InvitePlayer {
-                inviter: _,
-                match_id: _,
-            } => {
-                // Cross-chain invitation (Wave 3)
-                // For V1, we don't implement cross-chain invites
+            Message::JoinRequest { player, nickname } => {
+                // Handle cross-chain join request
+                let join_result = self.handle_join_match(player, nickname.clone()).await;
+                
+                if join_result.is_ok() {
+                    // Emit event that player joined
+                    let match_data = self.state.match_data.get();
+                    let event = GameEvent::PlayerJoined {
+                        nickname: nickname.clone(),
+                        player_count: match_data.players.len(),
+                    };
+                    self.runtime.emit(StreamName::from(GAME_EVENTS_STREAM), &event);
+                    
+                    // Send initial state sync back to the joining player
+                    // Note: In Linera, messages are sent to chains, not directly to AccountOwners
+                    // For now, we'll skip sending the sync message since the player can query state via GraphQL
+                    // In a full implementation, we'd track player chain IDs separately
+                }
+                
+                join_result
+            }
+            Message::InitialStateSync { config: _, players: _, status: _ } => {
+                // Player receives initial state from host
+                // In V1, we don't need to process this on contract side
+                // The frontend will handle this via GraphQL queries
                 Ok(())
             }
-            Message::PlayerJoined { player, nickname } => {
-                self.handle_remote_join(player, nickname).await
-            }
-            Message::StateUpdate {
-                current_player: _,
-                top_card: _,
-            } => {
-                // Broadcast state update (for spectators)
+            Message::GameEvent { event } => {
+                // Broadcast game event to subscribers
+                self.runtime.emit(StreamName::from(GAME_EVENTS_STREAM), &event);
                 Ok(())
             }
         };
 
-        // Silently ignore message errors for now
-        // Messages are non-critical and shouldn't crash the chain
+        // Silently handle message errors (don't crash the chain)
         if let Err(_e) = result {
-            // Error ignored - could be logged in production
+            // In production, could emit error event
         }
     }
 
@@ -159,8 +180,34 @@ impl LinotContract {
         }
 
         // Add player
-        match_data.players.push(Player::new(caller, nickname));
-        self.state.match_data.set(match_data);
+        match_data.players.push(Player::new(caller, nickname.clone()));
+        self.state.match_data.set(match_data.clone());
+        
+        // Emit event
+        let event = GameEvent::PlayerJoined {
+            nickname,
+            player_count: match_data.players.len(),
+        };
+        self.runtime.emit(StreamName::from(GAME_EVENTS_STREAM), &event);
+        
+        Ok(())
+    }
+
+    /// Handle cross-chain join request
+    async fn handle_join_from_chain(&mut self, host_chain_id: String, nickname: String) -> Result<(), LinotError> {
+        let caller = self.runtime.authenticated_signer().ok_or(LinotError::CallerRequired)?;
+        
+        // Parse host chain ID
+        let host_chain = host_chain_id.parse()
+            .map_err(|_| LinotError::CallerRequired)?; // Reuse error for simplicity
+        
+        // Send cross-chain join request message
+        let message = Message::JoinRequest {
+            player: caller,
+            nickname,
+        };
+        
+        self.runtime.send_message(host_chain, message);
         
         Ok(())
     }
@@ -211,8 +258,19 @@ impl LinotContract {
         match_data.deck = deck;
         match_data.status = MatchStatus::InProgress;
         match_data.current_player_index = 0;
+        match_data.turn_started_at = self.runtime.system_time().micros();
+
+        let first_player = match_data.players[0].nickname.clone();
+        let top_card = match_data.discard_pile.last().unwrap().clone();
 
         self.state.match_data.set(match_data);
+        
+        // Emit event
+        let event = GameEvent::MatchStarted {
+            first_player,
+            top_card,
+        };
+        self.runtime.emit(StreamName::from(GAME_EVENTS_STREAM), &event);
         
         Ok(())
     }
@@ -229,6 +287,13 @@ impl LinotContract {
         // Validate: match is in progress
         if match_data.status != MatchStatus::InProgress {
             return Err(LinotError::MatchNotInProgress);
+        }
+
+        // Check if turn has timed out (3 minutes)
+        let current_time = self.runtime.system_time().micros();
+        let elapsed = current_time.saturating_sub(match_data.turn_started_at);
+        if elapsed >= TURN_TIMEOUT_MICROS {
+            return Err(LinotError::TurnTimeout);
         }
 
         // Validate: it's caller's turn
@@ -257,6 +322,8 @@ impl LinotContract {
             top_card,
             match_data.active_shape_demand,
             match_data.pending_penalty,
+            match_data.hold_on_active,
+            match_data.hold_on_required_shape,
         ) {
             return Err(LinotError::InvalidCardPlay);
         }
@@ -276,7 +343,8 @@ impl LinotContract {
 
         // Apply special card effect
         let effect = GameEngine::get_card_effect(&card);
-        GameEngine::apply_effect(&mut match_data, effect, chosen_suit);
+        let card_suit = card.suit;
+        GameEngine::apply_effect(&mut match_data, effect, chosen_suit, card_suit);
 
         // Check if game ended
         if let Some(result) = GameEngine::check_game_end(&match_data) {
@@ -284,6 +352,17 @@ impl LinotContract {
                 GameResult::Winner(idx) => {
                     match_data.winner_index = Some(idx);
                     match_data.status = MatchStatus::Finished;
+                    
+                    // Emit game ended event
+                    let winner = match_data.players[idx].nickname.clone();
+                    let event = GameEvent::MatchEnded {
+                        winner: winner.clone(),
+                        winner_index: idx,
+                    };
+                    self.runtime.emit(StreamName::from(GAME_EVENTS_STREAM), &event);
+                    
+                    self.state.match_data.set(match_data);
+                    return Ok(());
                 }
                 GameResult::Draw => {
                     match_data.status = MatchStatus::Finished;
@@ -296,19 +375,61 @@ impl LinotContract {
             Self::apply_general_market(&mut match_data);
         }
 
+        let current_player_name = match_data.players[match_data.current_player_index].nickname.clone();
+        
         // Advance turn based on effect
-        if effect == SpecialEffect::PlayAgain {
-            // Hold On (1): Current player plays again, don't advance
-        } else if effect == SpecialEffect::SkipNext {
-            // Suspension (8): Skip next player by advancing twice
-            GameEngine::advance_turn(&mut match_data);
-            GameEngine::advance_turn(&mut match_data);
+        let skip_turn_advance = if effect == SpecialEffect::PlayAgain {
+            // Hold On (1): Current player must play again, don't advance
+            true
         } else {
-            // Normal: Advance to next player
-            GameEngine::advance_turn(&mut match_data);
-        }
+            // Clear hold on state when playing second card
+            if match_data.hold_on_active {
+                match_data.hold_on_active = false;
+                match_data.hold_on_required_shape = None;
+            }
+            
+            if effect == SpecialEffect::SkipNext {
+                // Suspension (8): Skip next player by advancing twice
+                GameEngine::advance_turn(&mut match_data);
+                GameEngine::advance_turn(&mut match_data);
+            } else {
+                // Normal: Advance to next player
+                GameEngine::advance_turn(&mut match_data);
+            }
+            
+            // Update turn timestamp
+            match_data.turn_started_at = self.runtime.system_time().micros();
+            
+            false
+        };
+
+        let next_player = match_data.players[match_data.current_player_index].nickname.clone();
 
         self.state.match_data.set(match_data);
+        
+        // Emit card played event
+        if !skip_turn_advance {
+            let special_desc = match effect {
+                SpecialEffect::ChooseShape => {
+                    let suit_name = format!("{:?}", chosen_suit.unwrap_or(CardSuit::Circle));
+                    Some(format!("Whot! Called {}", suit_name))
+                },
+                SpecialEffect::DrawTwo => Some("Pick Two".to_string()),
+                SpecialEffect::DrawThree => Some("Pick Three".to_string()),
+                SpecialEffect::SkipNext => Some("Suspension".to_string()),
+                SpecialEffect::AllDrawOne => Some("General Market".to_string()),
+                SpecialEffect::PlayAgain => Some("Hold On - Play Again".to_string()),
+                SpecialEffect::None => None,
+            };
+            
+            let event = GameEvent::CardPlayed {
+                player: current_player_name,
+                card,
+                next_player,
+                special_effect: special_desc,
+            };
+            self.runtime.emit(StreamName::from(GAME_EVENTS_STREAM), &event);
+        }
         
         Ok(())
     }
@@ -316,6 +437,13 @@ impl LinotContract {
     /// Handle drawing a card
     async fn handle_draw_card(&mut self, caller: AccountOwner) -> Result<(), LinotError> {
         let mut match_data = self.state.match_data.get().clone();
+
+        // Check if turn has timed out (3 minutes)
+        let current_time = self.runtime.system_time().micros();
+        let elapsed = current_time.saturating_sub(match_data.turn_started_at);
+        if elapsed >= TURN_TIMEOUT_MICROS {
+            return Err(LinotError::TurnTimeout);
+        }
 
         // Validate: it's caller's turn
         let current_player_idx = match_data.current_player_index;
@@ -361,11 +489,26 @@ impl LinotContract {
 
         // Clear active shape demand after drawing
         match_data.active_shape_demand = None;
+        
+        let player_name = current_player.nickname.clone();
 
         // Advance turn
         GameEngine::advance_turn(&mut match_data);
+        
+        // Update turn timestamp
+        match_data.turn_started_at = self.runtime.system_time().micros();
+        
+        let next_player = match_data.players[match_data.current_player_index].nickname.clone();
 
         self.state.match_data.set(match_data);
+        
+        // Emit event
+        let event = GameEvent::CardsDrawn {
+            player: player_name,
+            count: cards_to_draw,
+            next_player,
+        };
+        self.runtime.emit(StreamName::from(GAME_EVENTS_STREAM), &event);
         
         Ok(())
     }
@@ -414,7 +557,11 @@ impl LinotContract {
     async fn handle_leave_match(&mut self, caller: AccountOwner) -> Result<(), LinotError> {
         let mut match_data = self.state.match_data.get().clone();
 
-        // Mark player as inactive
+        // Find player and mark as inactive
+        let player_nickname = match_data.players.iter()
+            .find(|p| p.owner == caller)
+            .map(|p| p.nickname.clone());
+        
         if let Some(player) = match_data.players.iter_mut().find(|p| p.owner == caller) {
             player.is_active = false;
         }
@@ -426,17 +573,99 @@ impl LinotContract {
             let winner_idx = match_data.players.iter().position(|p| p.is_active).unwrap();
             match_data.winner_index = Some(winner_idx);
             match_data.status = MatchStatus::Finished;
+            
+            // Emit game ended event
+            let winner = match_data.players[winner_idx].nickname.clone();
+            let event = GameEvent::MatchEnded {
+                winner: winner.clone(),
+                winner_index: winner_idx,
+            };
+            self.runtime.emit(StreamName::from(GAME_EVENTS_STREAM), &event);
         }
 
         self.state.match_data.set(match_data);
         
+        // Emit player left event
+        if let Some(nickname) = player_nickname {
+            let event = GameEvent::PlayerLeft { nickname };
+            self.runtime.emit(StreamName::from(GAME_EVENTS_STREAM), &event);
+        }
+        
         Ok(())
     }
 
-    /// Handle remote player join (cross-chain)
-    async fn handle_remote_join(&mut self, player: AccountOwner, nickname: String) -> Result<(), LinotError> {
-        // In V1, we treat this the same as local join
-        self.handle_join_match(player, nickname).await
+    /// Check if current player has exceeded 3-minute timeout
+    /// If yes, automatically draw a card for them and advance turn
+    /// Anyone can call this to enforce fair play
+    async fn handle_check_timeout(&mut self) -> Result<(), LinotError> {
+        let mut match_data = self.state.match_data.get().clone();
+
+        // Only check timeout during active match
+        if match_data.status != MatchStatus::InProgress {
+            return Ok(()); // Silently ignore if not in progress
+        }
+
+        // Get current time
+        let current_time = self.runtime.system_time().micros();
+        let elapsed = current_time.saturating_sub(match_data.turn_started_at);
+
+        // Check if 3 minutes have passed
+        if elapsed < linot::TURN_TIMEOUT_MICROS {
+            return Ok(()); // No timeout yet
+        }
+
+        // Timeout occurred! Auto-draw card for current player
+        let current_player_idx = match_data.current_player_index;
+        let current_player = &mut match_data.players[current_player_idx];
+        let player_name = current_player.nickname.clone();
+
+        // Draw one card as penalty
+        let mut drawn = false;
+        if !match_data.deck.is_empty() {
+            if let Some(card) = match_data.deck.pop() {
+                current_player.cards.push(card);
+                current_player.update_card_count();
+                drawn = true;
+            }
+        } else {
+            // Deck empty - reshuffle if possible
+            if match_data.discard_pile.len() > 1 {
+                let top_card = match_data.discard_pile.pop().unwrap();
+                match_data.deck = match_data.discard_pile.clone();
+                match_data.discard_pile.clear();
+                match_data.discard_pile.push(top_card);
+
+                match_data.round_number += 1;
+                let seed = format!("{}{}", self.runtime.chain_id(), match_data.round_number);
+                GameEngine::shuffle_with_seed(&mut match_data.deck, seed.as_bytes());
+
+                if let Some(card) = match_data.deck.pop() {
+                    current_player.cards.push(card);
+                    current_player.update_card_count();
+                    drawn = true;
+                }
+            }
+        }
+
+        // Clear any active states
+        match_data.active_shape_demand = None;
+        match_data.hold_on_active = false;
+        match_data.hold_on_required_shape = None;
+
+        // Advance to next player
+        GameEngine::advance_turn(&mut match_data);
+        match_data.turn_started_at = current_time; // Reset timer for next player
+
+        self.state.match_data.set(match_data);
+
+        // Emit timeout event
+        let event = GameEvent::TurnTimeout {
+            player: player_name,
+            auto_drawn: drawn,
+        };
+        self.runtime.emit(StreamName::from(GAME_EVENTS_STREAM), &event);
+
+        Ok(())
     }
 
     /// Apply General Market effect (all other players draw 1)

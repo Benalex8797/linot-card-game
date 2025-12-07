@@ -68,6 +68,7 @@ Wave 2 successfully transformed Linot from a prototype into a functional multipl
 **Game Logic & Multiplayer:**
 
 - **Complete Whot ruleset** implemented with all 6 special cards (Whot, Hold On, Pick Two, Pick Three, Suspension, General Market)
+- **3-minute turn timeout** - Players must play within 3 minutes or automatically draw a card and lose their turn
 - **Human-vs-human mode** (2–4 players) synchronized over dedicated match microchains
 - **On-chain match creation** with automatic microchain instantiation per game
 - **Turn-based enforcement** with caller authentication and validation

@@ -5,49 +5,118 @@ use linot::{Card, CardSuit, CardValue};
 pub struct GameEngine;
 
 impl GameEngine {
-    /// Create a full 61-card Whot deck (56 regular + 5 Whot cards)
+    /// Create a full standard Whot deck (54 cards total)
+    /// Distribution per Whot rules:
+    /// - Circle: 1-14 (but limited distribution, ~8 cards)
+    /// - Cross: 1-7, 10, 13, 14 (~8 cards)
+    /// - Triangle: 1-5, 7, 10, 13, 14 (~8 cards)
+    /// - Square: 1-5, 7, 10, 13, 14 (~8 cards)
+    /// - Star: 1-8 (~8 cards)
+    /// - Whot cards: 5 cards (value 20)
     pub fn create_deck() -> Vec<Card> {
-        let mut deck = Vec::with_capacity(61);
+        let mut deck = Vec::with_capacity(54);
 
-        // Regular cards: 5 suits × 14 values = 70 cards, but only specific values exist
-        // According to Whot rules: each suit has cards 1-14 (excluding some based on variant)
-        // Standard Nigerian Whot: 1-14 for each of 5 suits
-        let suits = [
-            CardSuit::Circle,
-            CardSuit::Cross,
-            CardSuit::Triangle,
-            CardSuit::Square,
-            CardSuit::Star,
-        ];
-
-        let values = [
+        // Circle suit - most variety (8 cards: 1, 2, 3, 4, 5, 7, 11, 14)
+        let circle_values = [
             CardValue::One,
             CardValue::Two,
             CardValue::Three,
             CardValue::Four,
             CardValue::Five,
-            CardValue::Six,
+            CardValue::Seven,
+            CardValue::Eleven,
+            CardValue::Fourteen,
+        ];
+        for &value in &circle_values {
+            deck.push(Card {
+                suit: CardSuit::Circle,
+                value,
+            });
+        }
+
+        // Cross suit (8 cards: 1, 2, 3, 5, 7, 10, 13, 14)
+        let cross_values = [
+            CardValue::One,
+            CardValue::Two,
+            CardValue::Three,
+            CardValue::Five,
+            CardValue::Seven,
+            CardValue::Ten,
+            CardValue::Thirteen,
+            CardValue::Fourteen,
+        ];
+        for &value in &cross_values {
+            deck.push(Card {
+                suit: CardSuit::Cross,
+                value,
+            });
+        }
+
+        // Triangle suit (10 cards: 1, 2, 3, 4, 5, 7, 10, 11, 13, 14)
+        let triangle_values = [
+            CardValue::One,
+            CardValue::Two,
+            CardValue::Three,
+            CardValue::Four,
+            CardValue::Five,
+            CardValue::Seven,
+            CardValue::Ten,
+            CardValue::Eleven,
+            CardValue::Thirteen,
+            CardValue::Fourteen,
+        ];
+        for &value in &triangle_values {
+            deck.push(Card {
+                suit: CardSuit::Triangle,
+                value,
+            });
+        }
+
+        // Square suit (8 cards: 1, 2, 3, 5, 7, 10, 13, 14)
+        let square_values = [
+            CardValue::One,
+            CardValue::Two,
+            CardValue::Three,
+            CardValue::Five,
+            CardValue::Seven,
+            CardValue::Ten,
+            CardValue::Thirteen,
+            CardValue::Fourteen,
+        ];
+        for &value in &square_values {
+            deck.push(Card {
+                suit: CardSuit::Square,
+                value,
+            });
+        }
+
+        // Star suit (13 cards: 1, 2, 3, 4, 5, 7, 8, 10, 11, 12, 13, 14, extra 8)
+        let star_values = [
+            CardValue::One,
+            CardValue::Two,
+            CardValue::Three,
+            CardValue::Four,
+            CardValue::Five,
             CardValue::Seven,
             CardValue::Eight,
-            CardValue::Nine,
+            CardValue::Eight, // Extra 8 for Star
             CardValue::Ten,
             CardValue::Eleven,
             CardValue::Twelve,
             CardValue::Thirteen,
             CardValue::Fourteen,
         ];
-
-        // Create regular cards (multiple copies based on standard Whot distribution)
-        for &suit in &suits {
-            for &value in &values {
-                deck.push(Card { suit, value });
-            }
+        for &value in &star_values {
+            deck.push(Card {
+                suit: CardSuit::Star,
+                value,
+            });
         }
 
-        // Add 5 Whot (wild) cards
+        // Add 5 Whot (wild) cards - displayed as Star 20
         for _ in 0..5 {
             deck.push(Card {
-                suit: CardSuit::Star, // Whot cards typically use Star suit visually
+                suit: CardSuit::Star,
                 value: CardValue::Whot,
             });
         }
@@ -91,29 +160,46 @@ impl GameEngine {
     }
 
     /// Check if a card can be played on top of another card
+    /// Supports: Hold On state, penalty blocking/stacking, shape demands
     pub fn is_valid_play(
         card: &Card,
         top_card: &Card,
         active_demand: Option<CardSuit>,
         pending_penalty: u8,
+        hold_on_active: bool,
+        hold_on_required_shape: Option<CardSuit>,
     ) -> bool {
-        // Whot card can always be played
+        // Whot card (20) can always be played unless Hold On is active
         if card.value == CardValue::Whot {
+            if hold_on_active {
+                // Can only play Whot during Hold On if it matches the required shape
+                if let Some(required_shape) = hold_on_required_shape {
+                    return card.suit == required_shape;
+                }
+                return false;
+            }
             return true;
         }
 
-        // If there's a pending penalty, only specific cards can be played
+        // Hold On state: must match the required shape
+        if hold_on_active {
+            if let Some(required_shape) = hold_on_required_shape {
+                return card.suit == required_shape;
+            }
+        }
+
+        // If there's a pending penalty, can only block with same value or accept penalty
         if pending_penalty > 0 {
             return match top_card.value {
-                CardValue::PickTwo => card.value == CardValue::PickTwo,
-                CardValue::PickThree => card.value == CardValue::PickThree,
+                CardValue::Two => card.value == CardValue::Two,
+                CardValue::Five => card.value == CardValue::Five,
                 _ => false,
             };
         }
 
         // If there's an active shape demand (from Whot card), must match that suit
         if let Some(demanded_suit) = active_demand {
-            return card.suit == demanded_suit;
+            return card.suit == demanded_suit || card.value == CardValue::Whot;
         }
 
         // Normal play: match suit or value
@@ -124,11 +210,11 @@ impl GameEngine {
     pub fn get_card_effect(card: &Card) -> SpecialEffect {
         match card.value {
             CardValue::Whot => SpecialEffect::ChooseShape,
-            CardValue::HoldOn => SpecialEffect::PlayAgain,
-            CardValue::PickTwo => SpecialEffect::DrawTwo,
-            CardValue::PickThree => SpecialEffect::DrawThree,
-            CardValue::Suspension => SpecialEffect::SkipNext,
-            CardValue::GeneralMarket => SpecialEffect::AllDrawOne,
+            CardValue::One => SpecialEffect::PlayAgain,      // Hold On
+            CardValue::Two => SpecialEffect::DrawTwo,        // Pick Two
+            CardValue::Five => SpecialEffect::DrawThree,     // Pick Three
+            CardValue::Eight => SpecialEffect::SkipNext,     // Suspension
+            CardValue::Fourteen => SpecialEffect::AllDrawOne, // General Market
             _ => SpecialEffect::None,
         }
     }
@@ -138,33 +224,52 @@ impl GameEngine {
         state: &mut MatchData,
         effect: SpecialEffect,
         chosen_suit: Option<CardSuit>,
+        played_card_suit: CardSuit,
     ) {
         match effect {
             SpecialEffect::ChooseShape => {
                 if let Some(suit) = chosen_suit {
                     state.active_shape_demand = Some(suit);
                 }
+                state.hold_on_active = false;
+                state.hold_on_required_shape = None;
             }
             SpecialEffect::PlayAgain => {
-                // Current player plays again (don't advance turn)
-                // This is handled in contract by not calling advance_turn()
+                // Hold On (1): Current player must play again with same shape
+                state.hold_on_active = true;
+                state.hold_on_required_shape = Some(played_card_suit);
             }
             SpecialEffect::DrawTwo => {
-                state.pending_penalty = 2;
+                // Stack penalties if already active
+                if state.pending_penalty > 0 {
+                    state.penalty_stack += 2;
+                    state.pending_penalty += 2;
+                } else {
+                    state.pending_penalty = 2;
+                    state.penalty_stack = 2;
+                }
             }
             SpecialEffect::DrawThree => {
-                state.pending_penalty = 3;
+                // Stack penalties if already active
+                if state.pending_penalty > 0 {
+                    state.penalty_stack += 3;
+                    state.pending_penalty += 3;
+                } else {
+                    state.pending_penalty = 3;
+                    state.penalty_stack = 3;
+                }
             }
             SpecialEffect::SkipNext => {
-                // Skip next player (handled by advancing turn in contract)
-                // The contract will advance turn twice: once here, once normally
+                // Suspension handled in contract by advancing turn
             }
             SpecialEffect::AllDrawOne => {
-                // All other players draw 1 card (handled in contract)
+                // General Market - handled in contract
             }
             SpecialEffect::None => {
-                // Clear active demand if no special effect
-                state.active_shape_demand = None;
+                // Clear active demand and Hold On if no special effect
+                if !state.hold_on_active {
+                    state.active_shape_demand = None;
+                }
             }
         }
     }

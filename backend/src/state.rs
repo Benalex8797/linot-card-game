@@ -4,7 +4,7 @@ use linera_sdk::{
 };
 use serde::{Deserialize, Serialize};
 
-use linot::{Card, CardSuit};
+use linot::{Card, CardSuit, MatchConfig};
 
 /// Root application state stored on-chain using Linera Views
 #[derive(RootView)]
@@ -16,31 +16,6 @@ pub struct LinotState {
     pub match_data: RegisterView<MatchData>,
     /// Optional betting pool for staking (Wave 4-5)
     pub betting_pool: RegisterView<Option<BettingPool>>,
-}
-
-// ============ Match Configuration ============
-
-#[derive(Debug, Clone, Serialize, Deserialize, async_graphql::SimpleObject)]
-pub struct MatchConfig {
-    /// Maximum players allowed (2 for V1)
-    pub max_players: u8,
-    /// Host account who created the match
-    pub host: Option<AccountOwner>,
-    /// Whether this is a ranked/competitive match
-    pub is_ranked: bool,
-    /// Strict mode: must draw if no valid move
-    pub strict_mode: bool,
-}
-
-impl Default for MatchConfig {
-    fn default() -> Self {
-        Self {
-            max_players: 2,
-            host: None,
-            is_ranked: false,
-            strict_mode: false,
-        }
-    }
 }
 
 // ============ Match Data ============
@@ -67,6 +42,14 @@ pub struct MatchData {
     pub active_shape_demand: Option<CardSuit>,
     /// Pending penalty cards to draw (Pick Two/Three)
     pub pending_penalty: u8,
+    /// Turn start timestamp (for 3-minute timeout)
+    pub turn_started_at: u64,
+    /// Hold On state - player must play second card
+    pub hold_on_active: bool,
+    /// Hold On shape requirement (must match first card's shape)
+    pub hold_on_required_shape: Option<CardSuit>,
+    /// Penalty stack count (for stacking Pick 2/Pick 3)
+    pub penalty_stack: u8,
 }
 
 impl Default for MatchData {
@@ -82,6 +65,10 @@ impl Default for MatchData {
             created_at: 0,
             active_shape_demand: None,
             pending_penalty: 0,
+            turn_started_at: 0,
+            hold_on_active: false,
+            hold_on_required_shape: None,
+            penalty_stack: 0,
         }
     }
 }
