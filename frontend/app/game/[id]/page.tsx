@@ -41,8 +41,10 @@ function page() {
       </div>
       <div className="flex-1 space-y-20">
         {/* <PlayerTwo hand={state.playerTwoHand} /> */}
+        <PlayerTwo />
         <img src="/middle-cards.png" className="mx-auto" alt="" />
         {/* <PlayerOne hand={state.playerOneHand} /> */}
+        <PlayerOne />
       </div>
       <div className="space-y-[46px]">
         <GamePlayersTab />
