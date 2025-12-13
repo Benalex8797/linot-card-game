@@ -223,11 +223,9 @@ pub enum Message {
         players: Vec<String>, // player nicknames
         status: u8, // MatchStatus as u8
     },
-
-    /// Broadcast game event to all players
-    GameEvent {
-        event: GameEvent, // TODO: Migrate to WhotEvent in Phase 2
-    },
+    // NOTE: Events are NOT sent as messages!
+    // Events are delivered via process_streams() using read_event()
+    // See: LinotContract::process_streams() for event handling
 }
 
 // ============ Events (For Stream Emission) ============

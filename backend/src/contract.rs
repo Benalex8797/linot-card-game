@@ -208,68 +208,10 @@ impl Contract for LinotContract {
                 self.handle_check_timeout().await
             }
             Message::InitialStateSync { config: _, players: _, status: _ } => {
-                // User Chain: Received initial state from Host Chain
+                // USER_CHAIN: Received initial state from PLAY_CHAIN
                 // Store connection confirmed
                 self.state.active_game_chain_id.set(Some(self.runtime.message_origin_chain_id().unwrap()));
-                
-                // Emit event to notify frontend of successful connection
-                let _event = GameEvent::MatchStarted { // Using MatchStarted as a proxy for "Connection Established" for now or add a new event
-                     first_player: "".to_string(), // Placeholder
-                     top_card: linot::Card { suit: linot::CardSuit::Circle, value: linot::CardValue::One }, // Placeholder
-                };
-                // Actually, let's just log it for now as V1 doesn't have UserStatus in state yet
-                println!("DEBUG: User Chain connected to Host Chain: {:?}", self.state.active_game_chain_id.get());
-                Ok(())
-            }
-            Message::GameEvent { event } => {
-                // USER_CHAIN: Update local state cache from PLAY_CHAIN event
-                // This is the critical synchronization mechanism!
-                let mut match_data = self.state.match_data.get();
-                
-                match &event {
-                    GameEvent::PlayerJoined { nickname, player_count } => {
-                        // Update player count (we don't have full player details yet)
-                        println!("DEBUG: EVENT Player joined: {}, count: {}", nickname, player_count);
-                    }
-                    GameEvent::MatchStarted { first_player, top_card } => {
-                        // Update status to InProgress
-                        match_data.status = MatchStatus::InProgress;
-                        if !match_data.discard_pile.is_empty() {
-                            match_data.discard_pile.clear();
-                        }
-                        match_data.discard_pile.push(top_card.clone());
-                        println!("DEBUG: EVENT Match started, first player: {}", first_player);
-                    }
-                    GameEvent::CardPlayed { player, card, next_player, special_effect } => {
-                        // Update discard pile with played card
-                        match_data.discard_pile.push(card.clone());
-                        println!("DEBUG: EVENT Card played by {}: {:?}, next: {}, effect: {:?}", 
-                                 player, card, next_player, special_effect);
-                    }
-                    GameEvent::CardsDrawn { player, count, next_player } => {
-                        println!("DEBUG: EVENT {} drew {} cards, next: {}", player, count, next_player);
-                    }
-                    GameEvent::MatchEnded { winner, winner_index } => {
-                        match_data.status = MatchStatus::Finished;
-                        match_data.winner_index = Some(*winner_index);
-                        println!("DEBUG: EVENT Match ended, winner: {} (index {})", winner, winner_index);
-                    }
-                    GameEvent::PlayerLeft { nickname } => {
-                        println!("DEBUG: EVENT Player left: {}", nickname);
-                    }
-                    GameEvent::TurnTimeoutWarning { player } => {
-                        println!("DEBUG: EVENT Turn timeout warning for: {}", player);
-                    }
-                    GameEvent::TurnTimeout { player, auto_drawn } => {
-                        println!("DEBUG: EVENT Turn timeout for: {}, auto drew: {}", player, auto_drawn);
-                    }
-                }
-                
-                // Save updated state
-                self.state.match_data.set(match_data);
-                
-                // Re-broadcast event to local subscribers (frontend)
-                self.runtime.emit(StreamName::from(GAME_EVENTS_STREAM), &event);
+                println!("DEBUG: User Chain connected to Play Chain: {:?}", self.state.active_game_chain_id.get());
                 Ok(())
             }
         };
@@ -277,6 +219,30 @@ impl Contract for LinotContract {
         // Silently handle message errors (don't crash the chain)
         if let Err(_e) = result {
             // In production, could emit error event
+        }
+    }
+    
+    /// Process events from subscribed chains (CORRECT Linera pattern!)
+    /// This is how USER_CHAINs receive events from PLAY_CHAIN
+    async fn process_streams(&mut self, updates: Vec<linera_sdk::linera_base_types::StreamUpdate>) {
+        use linera_sdk::linera_base_types::StreamUpdate;
+        
+        for update in updates {
+            // Verify this is our game events stream
+            assert_eq!(update.stream_id.stream_name, StreamName::from(GAME_EVENTS_STREAM));
+            
+            // Process all new events
+            for index in update.new_indices() {
+                // Read the event from the source chain
+                let event: GameEvent = self.runtime.read_event(
+                    update.chain_id,
+                    StreamName::from(GAME_EVENTS_STREAM),
+                    index
+                );
+                
+                // Update USER_CHAIN state from PLAY_CHAIN event
+                self.sync_state_from_event(event, update.chain_id).await;
+            }
         }
     }
 
@@ -819,6 +785,54 @@ impl LinotContract {
                 }
             }
         }
+    }
+    
+    /// Sync USER_CHAIN state from PLAY_CHAIN events (Linera event stream pattern)
+    /// This is called from process_streams() for each received event
+    async fn sync_state_from_event(&mut self, event: GameEvent, _source_chain: linera_sdk::linera_base_types::ChainId) {
+        let mut match_data = self.state.match_data.get();
+        
+        match event {
+            GameEvent::PlayerJoined { nickname, player_count } => {
+                println!("DEBUG: EVENT Player joined: {}, count: {}", nickname, player_count);
+                // We could update player list here if we had full player info in the event
+            }
+            GameEvent::MatchStarted { first_player, top_card } => {
+                // Update status to InProgress
+                match_data.status = MatchStatus::InProgress;
+                if !match_data.discard_pile.is_empty() {
+                    match_data.discard_pile.clear();
+                }
+                match_data.discard_pile.push(top_card);
+                println!("DEBUG: EVENT Match started, first player: {}", first_player);
+            }
+            GameEvent::CardPlayed { player, card, next_player, special_effect } => {
+                // Update discard pile with played card
+                match_data.discard_pile.push(card);
+                println!("DEBUG: EVENT Card played by {}: {:?}, next: {}, effect: {:?}", 
+                         player, card, next_player, special_effect);
+            }
+            GameEvent::CardsDrawn { player, count, next_player } => {
+                println!("DEBUG: EVENT {} drew {} cards, next: {}", player, count, next_player);
+            }
+            GameEvent::MatchEnded { winner, winner_index } => {
+                match_data.status = MatchStatus::Finished;
+                match_data.winner_index = Some(winner_index);
+                println!("DEBUG: EVENT Match ended, winner: {} (index {})", winner, winner_index);
+            }
+            GameEvent::PlayerLeft { nickname } => {
+                println!("DEBUG: EVENT Player left: {}", nickname);
+            }
+            GameEvent::TurnTimeoutWarning { player } => {
+                println!("DEBUG: EVENT Turn timeout warning for: {}", player);
+            }
+            GameEvent::TurnTimeout { player, auto_drawn } => {
+                println!("DEBUG: EVENT Turn timeout for: {}, auto drew: {}", player, auto_drawn);
+            }
+        }
+        
+        // Save updated state
+        self.state.match_data.set(match_data);
     }
 }
 
