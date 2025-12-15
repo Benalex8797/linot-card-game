@@ -19,6 +19,19 @@ https://linera.dev/developers/core_concepts/applications.html
 https://linera.dev/developers/core_concepts/design_patterns.html
 
 
+Use these for better understnading of Linera 
+
+https://linera.dev/developers/core_concepts/wallets.html#default-chain
+https://linera.dev/protocol/overview.html#how-do-microchains-work
+https://linera.dev/developers/core_concepts/microchains.html#cross-chain-messaging
+https://linera.dev/developers/backend/messages.html#cross-chain-messages
+
+
+Frontend 
+https://linera.dev/developers/frontend/setup.html
+https://linera.dev/developers/frontend/interactivity.html
+https://linera.dev/developers/frontend/wallets.html
+
 Check this for better knowledge on multiplayer 
 https://github.com/linera-io/linera-protocol/tree/main/examples/hex-game 
 
@@ -29,3 +42,7 @@ https://github.com/linera-io/linera-protocol/tree/main/examples%2Fsocial
 
 build a project that has to be run locally BUT it MUST be built upon this template https://github.com/linera-io/buildathon-template
 
+
+okay the runbash has a slight issue.  It is terminating
+
+The application is supposed to be deployed successfully so I can query  the proper links for graphql for player 1 and player 2 

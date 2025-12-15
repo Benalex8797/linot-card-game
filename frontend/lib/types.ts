@@ -1,9 +1,10 @@
+// Game Types (matching backend schema)
 export interface Card {
   suit: string;
   value: string;
 }
 
-export interface OpponentView {
+export interface Player {
   owner: string;
   nickname: string;
   cardCount: number;
@@ -11,11 +12,37 @@ export interface OpponentView {
   calledLastCard: boolean;
 }
 
+export interface MatchState {
+  status: string;
+  currentPlayerIndex: number;
+  topCard: Card | null;
+  deckSize: number;
+  activeShapeDemand: string | null;
+  pendingPenalty: number;
+  players: Player[];
+}
+
+export interface MyHand {
+  hand: Card[];
+}
+
+// GraphQL Query Response Types
+export interface MatchStateResponse {
+  matchState: MatchState;
+}
+
+export interface MyHandResponse {
+  myHand: MyHand;
+}
+
+export interface GameDataResponse extends MatchStateResponse, MyHandResponse {}
+
+// UI State (transformed for components)
 export interface PlayerView {
   myCards: Card[];
   myCardCount: number;
   calledLastCard: boolean;
-  opponents: OpponentView[];
+  opponents: Player[];
   topCard: Card | null;
   deckSize: number;
   currentPlayerIndex: number;
@@ -24,3 +51,5 @@ export interface PlayerView {
   pendingPenalty: number;
 }
 
+// Re-export Player as OpponentView for backward compatibility
+export type OpponentView = Player;

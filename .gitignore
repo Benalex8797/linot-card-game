@@ -11,10 +11,18 @@
 /inspo-multi
 /docs/linera_doc_details
 /template/
+docs/regression_tests 
 /docs/previous-waves
 /docs/wave_4_revamp
-docs/regression_tests 
-### Internal/Development Documentation (not for judges)
+
+# build output
+/frontend/dist/
+/frontend/web/
+/frontend/web_p1/
+/frontend/web_p2/
+/dist/
+
+### Internal/Development Documentation
 # Wave 2 internal tracking files
 DEPLOYMENT_GUIDE.md
 GRAPHQL_API.md
