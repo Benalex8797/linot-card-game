@@ -11,11 +11,9 @@ RUN apt-get update && apt-get install -y \
 
 RUN cargo install --locked linera-service@0.15.6 linera-storage-service@0.15.6
 
-# Install Node.js via NVM (template pattern)
-RUN curl https://raw.githubusercontent.com/creationix/nvm/v0.40.3/install.sh | bash \
-    && . ~/.nvm/nvm.sh \
-    && nvm install lts/hydrogen \
-    && nvm use lts/hydrogen \
+# Install Node.js for frontend
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y nodejs \
     && npm install -g http-server
 
 WORKDIR /build

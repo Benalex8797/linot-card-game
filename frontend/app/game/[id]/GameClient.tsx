@@ -10,7 +10,7 @@ import { useWhotGame } from "../../../hooks/useWhotGame";
 import { OpponentView } from "../../../lib/types";
 
 export default function GameClient() {
-  const { gameState, loading, error, joinGame, startGame, playCard, drawCard, callLastCard, playerNumber } = useWhotGame();
+  const { gameState, loading, error, joinGame, startGame, playCard, drawCard, callLastCard, playerNumber } = useWhotGame(1);
   const [username, setUsername] = useState<string>("");
 
   useEffect(() => {

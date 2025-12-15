@@ -1,17 +1,29 @@
 services:
-  whot:
-    build: .
+  linot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: linot-card-game-linot-1
     ports:
-      - "3000:3000"   # Frontend
-      - "8080:8080"   # Faucet
-      - "8081:8081"   # Player 1 GraphQL
-      - "8082:8082"   # Player 2 GraphQL
+      - "5173:5173"     # Frontend
+      - "8080:8080"     # Faucet
+      - "8081:8081"     # Player 1 GraphQL
+      - "8082:8082"     # Player 2 GraphQL
+      - "9001:9001"     # Linera service
+      - "13001:13001"   # Storage service
     volumes:
-      - .:/build
-    hostname: whot
-    networks:
-      - whot-network
+      - ./backend:/build/backend
+      - ./frontend:/build/frontend
+      - ./run.bash:/build/run.bash
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-target:/build/backend/target
+      - node-modules:/build/frontend/node_modules
+    environment:
+      - RUST_LOG=info
+    stdin_open: true
+    tty: true
 
-networks:
-  whot-network:
-    driver: bridge
+volumes:
+  cargo-registry:
+  cargo-target:
+  node-modules:
