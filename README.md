@@ -201,10 +201,6 @@ Once running, you'll see:
 Linot Running!
 ================================================
 
-Frontend:
-  Player 1: http://localhost:5173?player=1
-  Player 2: http://localhost:5174?player=2
-
 GraphQL:
   Player 1: http://localhost:8081
   Player 2: http://localhost:8082
@@ -218,6 +214,15 @@ Application Details:
 GraphQL Test URLs:
   Player 1: http://localhost:8081/chains/<USER_CHAIN_1>/applications/<APP_ID>
   Player 2: http://localhost:8082/chains/<USER_CHAIN_2>/applications/<APP_ID>
+
+Frontend URLs:
+  For Player 1 Available on:
+  http://127.0.0.1:5173
+  http://10.27.195.40:5173
+
+  For Player 2 Available on:
+  http://127.0.0.1:5174
+  http://10.27.195.40:5174
 
 Services running. Press Ctrl+C to stop.
 ```
@@ -531,10 +536,8 @@ linot-card-game/
 ##  Links
 
 - **GitHub:** <https://github.com/dinahmaccodes/card-game>
-- **Live Demo:** <https://linot.vercel.app>
-- **Linera Docs:** <https://linera.dev>
-- **Pitch Deck:** [Figma](https://www.figma.com/proto/4dgqc4TA9XoNoUNmy1xerT/Hackathon-Projects?page-id=1082%3A2&node-id=1500-3855)
-
+- **Live Demo:** <http://127.0.0.1:5173>
+- **Linera Docs - used for reference & Understanding:** <https://linera.dev>
 ---
 
 ##  Wave 4 Summary
