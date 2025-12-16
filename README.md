@@ -338,7 +338,7 @@ curl -X POST "http://localhost:8081/chains/fc3af78e8b41ed93e75fee47c14a5cb38f88b
 curl -X POST "http://localhost:8082/chains/<USER_CHAIN_2>/applications/<APP_ID>" \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "mutation { joinMatch(playChainId: \"<PLAY_CHAIN>\", nickname: \"Bob\") }"
+    "query": "mutation { joinMatch(playChainId: \"<PLAY_CHAIN>\", nickname: \"Joshua\") }"
   }'
 ```
 
