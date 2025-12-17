@@ -43,7 +43,7 @@
 
 ```bash
 # 1. Deploy everything
-./run.bash
+docker compose up
 
 # 2. Open frontend in browser
 # Prefered to use live links 
