@@ -177,9 +177,14 @@ git clone https://github.com/dinahmaccodes/card-game.git
 cd linot-card-game
 
 # Start everything with the deployment script
-./run.bash
-```
+docker compose up 
 
+```
+If you want to rebuild, use this command to ensure everything got installed 
+
+```
+docker compose up --build --force-recreate
+```
 **What happens:**
 1. Initializes Linera network with local faucet
 2. Creates 2 player wallets with separate chains
