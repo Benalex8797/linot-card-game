@@ -17,8 +17,8 @@ RUN cargo install --locked linera-service@0.15.8
 # Add WASM target for building Linera contracts
 RUN rustup target add wasm32-unknown-unknown
 
-# Install Node.js for frontend (using Debian's native package - no external DNS needed)
-# Provides Node.js 18.20.4 which is perfect for Next.js 16.0.7
+# Install Node.js 18 for frontend (compatible with Next.js 15.1.0)
+# Using Debian's native package - no external DNS needed for reliable builds
 RUN apt-get install -y nodejs npm \
     && npm install -g http-server
 
