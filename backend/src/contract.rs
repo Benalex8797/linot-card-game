@@ -256,6 +256,14 @@ impl Contract for LinotContract {
                 self.handle_request_join_message(player_owner, player_chain, nickname).await;
             }
             
+            // USER_CHAIN: Confirmation of join from PLAY_CHAIN (triggers subscribe!)
+            Message::JoinMatchConfirmed {
+                play_chain_id,
+                success,
+            } => {
+                self.handle_join_confirmed(play_chain_id, success).await;
+            }
+            
             Message::StartMatchAction { player_owner: _ } => {
                 // Player requesting to start match on PLAY_CHAIN
                 log::info!("PLAY_CHAIN: Received StartMatchAction");

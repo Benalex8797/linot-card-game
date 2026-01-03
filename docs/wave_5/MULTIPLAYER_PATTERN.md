@@ -13,7 +13,7 @@ http://localhost:8080/chains/PLAYER2_CHAIN/applications/APP_ID  ❌
 
 ---
 
-## ✅ How It Actually Works (From Microcard)
+## ✅ How It Actually Works (From Inspo)
 
 ### The Pattern:
 

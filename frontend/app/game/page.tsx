@@ -298,20 +298,24 @@ function GameClient() {
   // 3. Game Board (In Progress or Finished)
   return (
     <div
-      className="h-screen w-full relative overflow-hidden flex flex-col"
+      className="min-h-screen w-full relative overflow-y-auto flex flex-col scroll-smooth"
       style={{
         background: "linear-gradient(180deg, #77F0FC 0%, #19D3F9 100%)",
       }}
     >
       <img
         src="/water-bubbles.svg"
-        className="absolute z-3 top-0 left-[150px] animate-bubbles animation-delay-2000"
+        className="fixed z-3 top-0 left-[150px] animate-bubbles animation-delay-2000 pointer-events-none"
         alt=""
       />
-      <img src="/sea-walls.png" className="absolute z-3 top-0 left-0" alt="" />
+      <img 
+        src="/sea-walls.png" 
+        className="fixed z-3 top-0 left-0 pointer-events-none" 
+        alt="" 
+      />
       <img
         src="/reflection-lights.svg"
-        className="absolute z-3 top-0 left-0 animate-shimmer"
+        className="fixed z-3 top-0 left-0 animate-shimmer pointer-events-none"
         alt=""
       />
       <Navbar />

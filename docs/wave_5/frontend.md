@@ -175,7 +175,7 @@ mutation {
 - Click "Call Last Card!" → Call `callLastCard` mutation
 
 **Transitions:**
-- When [status](file:///home/dinahmaccodes/Documents/linot-card-game/inspo-multi/microcard-master/blackjack/src/service.rs#84-87) changes to `Finished` → Navigate to Winner Screen
+- When [status]changes to `Finished` → Navigate to Winner Screen
 
 ---
 

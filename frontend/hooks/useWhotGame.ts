@@ -64,15 +64,15 @@ export function useWhotGame(playerNumber: 1 | 2) {
         myCardCount: data.myHand?.length || 0,
         calledLastCard: allPlayers[myPlayerIndex]?.calledLastCard || false,
         opponents: allPlayers
-          .map((p: any, index: number) => ({
+          .map((p: any, index: number) => p ? ({  // ← Check if p is not null
             nickname: p.nickname,
             cardCount: p.handSize || 0,
             calledLastCard: p.calledLastCard,
             owner: p.owner,
             isActive: p.isActive || false,
             index: index
-          }))
-          .filter((p: any) => p.index !== myPlayerIndex), // Exclude current player by index
+          }) : null)
+          .filter((p: any) => p !== null && p.index !== myPlayerIndex), // Filter nulls and current player
         topCard: data.matchState.discardPile?.[data.matchState.discardPile.length - 1] || null,
         deckSize: data.matchState.deckSize || 0,
         currentPlayerIndex: data.matchState.currentPlayerIndex || 0,
@@ -151,51 +151,78 @@ export function useWhotGame(playerNumber: 1 | 2) {
     }
   }, [playerNumber, fetchState]);
 
-  // UPDATED: Auto-subscribe and then create/join match
+  // UPDATED: Inspo subscribe pattern - Player 1 subscribes, Player 2 auto-subscribes via joinMatch
   const joinGame = useCallback(async (nickname: string, maxPlayers: number = 2) => {
     try {
       const config = await loadConfig();
       
-      // STEP 1: Auto-subscribe (behind the scenes) - only once
-      if (!isSubscribed.current) {
-        console.log('[useWhotGame] Auto-subscribing to PLAY_CHAIN...');
-        await mutateUserChain(`
-          mutation Subscribe($playChainId: String!) {
-            subscribe(playChainId: $playChainId)
-          }
-        `, { playChainId: config.playChain }, playerNumber);
-        isSubscribed.current = true;
-        console.log('[useWhotGame] ✅ Subscribed to PLAY_CHAIN');
-      }
-      
-      // STEP 2: Create or Join match
       if (playerNumber === 1) {
-        console.log('[useWhotGame] Player 1: Creating match...');
-        console.log(`[useWhotGame] Max players: ${maxPlayers}, Nickname: ${nickname}`);
+        // Player 1 Flow: Subscribe → CreateMatch
+        
+        // STEP 1: Subscribe to PLAY_CHAIN (required for createMatch)
+        if (!isSubscribed.current) {
+          console.log('[Player 1] Subscribing to PLAY_CHAIN...');
+          await mutateUserChain(`
+            mutation Subscribe($playChainId: String!) {
+              subscribe(playChainId: $playChainId)
+            }
+          `, { playChainId: config.playChain }, playerNumber);
+          isSubscribed.current = true;
+          console.log('[Player 1] ✅ Subscribed');
+        }
+        
+        // STEP 2: Create match
+        console.log('[Player 1] Creating match...');
+        console.log(`[Player 1] Max players: ${maxPlayers}, Nickname: ${nickname}`);
         await mutateUserChain(`
           mutation CreateMatch($maxPlayers: Int!, $nickname: String!) {
             createMatch(maxPlayers: $maxPlayers, nickname: $nickname)
           }
         `, { maxPlayers, nickname }, playerNumber);
-        console.log('[useWhotGame] ✅ Match created');
+        console.log('[Player 1] ✅ Match creation requested');
+        
+        // Wait for PLAY_CHAIN message processing
+        console.log('[Player 1] Waiting for cross-chain message processing...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
       } else {
-        console.log('[useWhotGame] Player 2: Joining match...');
-        console.log(`[useWhotGame] PLAY_CHAIN ID: ${config.playChain}, Nickname: ${nickname}`);
+        // Player 2 Flow: JoinMatch (auto-subscribes via backend confirmation)
+        
+        console.log('[Player 2] Joining match...');
+        console.log(`[Player 2] PLAY_CHAIN: ${config.playChain}, Nickname: ${nickname}`);
+        
+        // joinMatch sends RequestJoin → PLAY_CHAIN confirms → auto-subscribe
         await mutateUserChain(`
           mutation JoinMatch($playChainId: String!, $nickname: String!) {
             joinMatch(playChainId: $playChainId, nickname: $nickname)
           }
         `, { playChainId: config.playChain, nickname }, playerNumber);
-        console.log('[useWhotGame] ✅ Joined match');
+        
+        isSubscribed.current = true; // Backend handles subscription
+        console.log('[Player 2] ✅ Join requested (backend will auto-subscribe)');
+        
+        // Wait for PLAY_CHAIN message processing
+        console.log('[Player 2] Waiting for cross-chain message processing...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
       
-      // STEP 3: Start polling
+      // STEP 3: Fetch and verify state
+      console.log('[useWhotGame] Fetching game state...');
       await fetchState();
+      
+      // Verify player joined (check if game state was populated)
+      if (gameState) {
+        console.log('[useWhotGame] ✅ Game state fetched - player in match');
+      } else {
+        console.warn('[useWhotGame] Game state not yet available - messages may still be processing');
+      }
+      
     } catch (err) {
       console.error('[useWhotGame] joinGame error:', err);
+      isSubscribed.current = false; // Reset on error
       throw err;
     }
-  }, [playerNumber, fetchState]);
+  }, [playerNumber, fetchState, gameState]);
 
   const startGame = useCallback(async () => {
     try {

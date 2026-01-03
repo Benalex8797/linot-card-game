@@ -1,6 +1,6 @@
 use linera_sdk::linera_base_types::{AccountOwner, ChainId};
 use linot::{
-    Card, CardSuit, GameEvent, LinotResponse, MatchStatus, Player,
+    Card, CardSuit, GameEvent, LinotResponse, MatchStatus, Message, Player,
     SpecialEffect, UserStatus, GAME_STREAM_NAME, INITIAL_HAND_SIZE, MAX_PLAYERS, MIN_PLAYERS,
 };
 
@@ -219,6 +219,7 @@ match_data.discard_pile.push(card);
     ) {
         let origin_chain = self.runtime.message_origin_chain_id()
             .expect("Message has no origin");
+        let play_chain_id = self.runtime.chain_id();
 
         let match_data = self.state.match_data.get_mut();
 
@@ -230,14 +231,28 @@ match_data.discard_pile.push(card);
             let player_count = match_data.players.iter()
                 .filter(|p| p.is_some()).count();
 
+            // Send confirmation back to USER_CHAIN (triggers subscribe!)
+            let confirmation = Message::JoinMatchConfirmed {
+                play_chain_id,
+                success: true,
+            };
+            self.runtime.prepare_message(confirmation).send_to(player_chain);
+
             // Emit event
             self.emit_event(GameEvent::PlayerJoined {
                 nickname,
                 player_count,
             });
 
-            log::info!("PLAY_CHAIN: Player joined from chain: {:?}", origin_chain);
+            log::info!("PLAY_CHAIN: Player joined from chain: {:?}, sent confirmation", origin_chain);
         } else {
+            // Send failure confirmation
+            let confirmation = Message::JoinMatchConfirmed {
+                play_chain_id,
+                success: false,
+            };
+            self.runtime.prepare_message(confirmation).send_to(player_chain);
+
             log::warn!("PLAY_CHAIN: No empty slots for player to join");
         }
     }

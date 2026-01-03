@@ -85,6 +85,7 @@ pub enum Operation {
 pub enum UserStatus {
     Idle,
     CreatingMatch,
+    WaitingToJoin,  // Waiting for join confirmation from PLAY_CHAIN
     InMatch,
     WaitingForPlayers,
 }
@@ -119,6 +120,12 @@ pub enum Message {
         player_owner: AccountOwner,
         player_chain: ChainId,
         nickname: String,
+    },
+    
+    /// PLAY_CHAIN -> USER_CHAIN: Confirm join was successful (triggers subscribe)
+    JoinMatchConfirmed {
+        play_chain_id: ChainId,
+        success: bool,
     },
     
     /// USER_CHAIN -> PLAY_CHAIN: Request to start the match
