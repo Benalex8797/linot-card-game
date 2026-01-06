@@ -14,6 +14,7 @@
 /template/
 docs/regression_tests 
 /docs/previous-waves
+docs/wave_5
 # /docs/wave_4_revamp
 
 # build output
@@ -21,6 +22,10 @@ docs/regression_tests
 /frontend/web/
 /frontend/web_p1/
 /frontend/web_p2/
+
+# Testnet deployment files (persistent, should not be committed)
+.linera/
+deployment_info.json
 /dist/
 
 ### Internal/Development Documentation
@@ -39,15 +44,15 @@ WAVE2_SUMMARY.md
 /docs/code.md
 /docs/building_logic_v1.md
 /docs/backend_starting_phase.md
-/docs/backend_whot_format.md
-/docs/backend_whot_rules.md
-/docs/getting_statrted.md
-/docs/deployment_local_guide.md
-/docs/technical_architecture.md
-/docs/details.md
+# /docs/backend_whot_format.md
+# # /docs/backend_whot_rules.md
+# # /docs/getting_statrted.md
+# # /docs/deployment_local_guide.md
+# # /docs/technical_architecture.md
+# # /docs/details.md
 
 # Template folder (unused)
-# /template/
+/template/
 # dependency directories
 /frontend/node_modules/
 
