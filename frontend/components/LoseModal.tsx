@@ -110,7 +110,7 @@ export default function LoseModal({
                   customShadow="-1.4px -2.1px 4.89px 0px rgba(1, 98, 111, 0.8) inset, 4.19px 2.1px 4.89px 0px rgba(119, 240, 252, 0.25) inset"
                 >
                   <p className="flex gap-5">
-                    <span>play again</span> <RotateCcw />
+                    <span>new game</span> <RotateCcw />
                   </p>
                 </GameButton>
                 <GameButton

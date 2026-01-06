@@ -3,7 +3,7 @@
 mod state;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema, SimpleObject};
-use linera_sdk::linera_base_types::{ChainId, WithServiceAbi};
+use linera_sdk::linera_base_types::{AccountOwner, ChainId, WithServiceAbi};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
     views::View,
@@ -74,14 +74,15 @@ impl QueryRoot {
         None
     }
 
-    /// Get player's own hand (filtered for privacy)
-    async fn my_hand(&self) -> Vec<Card> {
-        // Query PLAY_CHAIN match_data for player hands
-        // TODO: Filter by authenticated owner in production
+    /// Get player's hand by their AccountOwner
+    /// Uses microchess pattern: frontend passes owner parameter
+    async fn my_hand(&self, owner: AccountOwner) -> Vec<Card> {
         let match_data = self.state.match_data.get();
         for player_opt in &match_data.players {
             if let Some(player) = player_opt {
-                return player.hand.clone();
+                if player.owner == owner {
+                    return player.hand.clone();
+                }
             }
         }
         

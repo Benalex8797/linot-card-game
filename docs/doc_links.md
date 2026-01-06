@@ -42,7 +42,4 @@ https://github.com/linera-io/linera-protocol/tree/main/examples%2Fsocial
 
 build a project that has to be run locally BUT it MUST be built upon this template https://github.com/linera-io/buildathon-template
 
-
-okay the runbash has a slight issue.  It is terminating
-
 The application is supposed to be deployed successfully so I can query  the proper links for graphql for player 1 and player 2 

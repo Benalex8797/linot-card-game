@@ -9,6 +9,12 @@ import PlayerTwo from "../../components/PlayerTwo";
 import PlayerOne from "../../components/PlayerOne";
 import WinModal from "../../components/WinModal";
 import LoseModal from "../../components/LoseModal";
+import Card from "../../components/Card";
+import PenaltyNotification from "../../components/PenaltyNotification";
+import HoldOnNotification from "../../components/HoldOnNotification";
+import GeneralMarketNotification from "../../components/GeneralMarketNotification";
+import DrawNotification from "../../components/DrawNotification";
+import LastCardNotification from "../../components/LastCardNotification";
 import { useWhotGame } from "../../hooks/useWhotGame";
 import { OpponentView } from "../../lib/types";
 import Navbar from "../../components/Navbar";
@@ -28,12 +34,28 @@ function GameClient() {
     drawCard,
     callLastCard,
   } = useWhotGame(playerNumber);
+
+  // Extract active demand suit for visual indicator (null-safe)
+  const activeShapeDemand = gameState?.activeShapeDemand;
   const [username, setUsername] = useState<string>("");
   const [maxPlayers, setMaxPlayers] = useState<number>(2);
 
   // Modal states for testing/editing
   const [showWinModal, setShowWinModal] = useState(false);
   const [showLoseModal, setShowLoseModal] = useState(false);
+
+  // Track previous penalty for notification changes
+  const [previousPenalty, setPreviousPenalty] = useState(0);
+
+  // Track previous player index for Hold On detection
+  const [previousPlayerIndex, setPreviousPlayerIndex] = useState<number>(-1);
+
+  // Track previous deck size for General Market detection
+  const [previousDeckSize, setPreviousDeckSize] = useState<number>(-1);
+
+  // Track previous opponent hand size for Draw notification
+  const [previousOpponentHandSize, setPreviousOpponentHandSize] =
+    useState<number>(0);
 
   useEffect(() => {
     const storedProfile = localStorage.getItem(
@@ -53,6 +75,68 @@ function GameClient() {
       }
     }
   }, [playerNumber]);
+
+  // Track penalty changes for notifications
+  useEffect(() => {
+    if (gameState) {
+      setPreviousPenalty(gameState.pendingPenalty);
+    }
+  }, [gameState?.pendingPenalty]);
+
+  // Track player index changes for Hold On notification
+  useEffect(() => {
+    if (gameState && gameState.currentPlayerIndex !== previousPlayerIndex) {
+      setPreviousPlayerIndex(gameState.currentPlayerIndex);
+    }
+  }, [gameState?.currentPlayerIndex, previousPlayerIndex]);
+
+  // Track deck size changes for General Market notification
+  useEffect(() => {
+    if (gameState && gameState.deckSize !== previousDeckSize) {
+      setPreviousDeckSize(gameState.deckSize);
+    }
+  }, [gameState?.deckSize, previousDeckSize]);
+
+  // Track opponent hand size changes for Draw notification
+  useEffect(() => {
+    if (gameState && gameState.opponents.length > 0) {
+      const opponentHandSize = gameState.opponents[0].cardCount;
+      if (previousOpponentHandSize === 0) {
+        // Initialize
+        setPreviousOpponentHandSize(opponentHandSize);
+      } else if (opponentHandSize !== previousOpponentHandSize) {
+        setPreviousOpponentHandSize(opponentHandSize);
+      }
+    }
+  }, [gameState?.opponents, previousOpponentHandSize]);
+
+  // Detect game ending and show win/lose modal
+  useEffect(() => {
+    if (
+      gameState &&
+      gameState.status.toUpperCase() === "FINISHED" &&
+      gameState.winnerIndex !== null
+    ) {
+      // Player numbers are 1-indexed, winnerIndex is 0-indexed
+      const localPlayerIndex = playerNumber - 1;
+      const didIWin = gameState.winnerIndex === localPlayerIndex;
+
+      console.log(
+        "[Game] Game finished! Winner index:",
+        gameState.winnerIndex,
+        "Local player index:",
+        localPlayerIndex,
+        "Did I win:",
+        didIWin
+      );
+
+      if (didIWin) {
+        setShowWinModal(true);
+      } else {
+        setShowLoseModal(true);
+      }
+    }
+  }, [gameState?.status, gameState?.winnerIndex, playerNumber]);
 
   if (loading) {
     return (
@@ -308,10 +392,10 @@ function GameClient() {
         className="fixed z-3 top-0 left-[150px] animate-bubbles animation-delay-2000 pointer-events-none"
         alt=""
       />
-      <img 
-        src="/sea-walls.png" 
-        className="fixed z-3 top-0 left-0 pointer-events-none" 
-        alt="" 
+      <img
+        src="/sea-walls.png"
+        className="fixed z-3 top-0 left-0 pointer-events-none"
+        alt=""
       />
       <img
         src="/reflection-lights.svg"
@@ -319,33 +403,145 @@ function GameClient() {
         alt=""
       />
       <Navbar />
-      <div className="flex-1 w-full relative overflow-hidden flex gap-x-12.5 px-5">
-        <div className="space-y-12 pt-10 z-40">
-          <LiveChat />
-          <div className="mt-10">
-            <Timer />
+
+      {/* Penalty Card Notification */}
+      <PenaltyNotification
+        pendingPenalty={gameState.pendingPenalty}
+        previousPenalty={previousPenalty}
+        opponentName={gameState.opponents[0]?.nickname || "Opponent"}
+        currentPlayerName={username || `Player ${playerNumber}`}
+        isMyTurn={gameState.currentPlayerIndex !== playerNumber - 1}
+      />
+
+      {/* Hold On Notification */}
+      <HoldOnNotification
+        previousPlayerIndex={previousPlayerIndex}
+        currentPlayerIndex={gameState.currentPlayerIndex}
+        playerNumber={playerNumber}
+        playerName={username || `Player ${playerNumber}`}
+        skippedPlayerName={
+          gameState.opponents.find(
+            (_, idx) => idx + 1 === previousPlayerIndex + 1
+          )?.nickname || "Opponent"
+        }
+      />
+
+      {/* Draw Notification - shows when opponent draws cards */}
+      <DrawNotification
+        opponentName={gameState.opponents[0]?.nickname || "Opponent"}
+        opponentHandSize={gameState.opponents[0]?.cardCount || 0}
+        previousOpponentHandSize={previousOpponentHandSize}
+        isMyTurn={gameState.currentPlayerIndex === playerNumber - 1}
+      />
+
+      {/* Last Card Notification - shows when opponent has 1 card left */}
+      <LastCardNotification
+        opponentName={gameState.opponents[0]?.nickname || "Opponent"}
+        opponentHandSize={gameState.opponents[0]?.cardCount || 0}
+        previousOpponentHandSize={previousOpponentHandSize}
+      />
+
+      {/* General Market Notification */}
+      <GeneralMarketNotification
+        previousDeckSize={previousDeckSize}
+        currentDeckSize={gameState.deckSize}
+        currentPlayerIndex={gameState.currentPlayerIndex}
+        previousPlayerIndex={previousPlayerIndex}
+        playerNumber={playerNumber}
+        opponentName={gameState.opponents[0]?.nickname || "Opponent"}
+        topCard={gameState.topCard}
+      />
+
+      {/* Active Demand Suit Indicator */}
+      {activeShapeDemand && (
+        <div
+          className="absolute top-24 left-1/2 transform -translate-x-1/2 z-50 
+                      bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 
+                      px-8 py-4 rounded-2xl shadow-2xl border-4 border-white
+                      animate-pulse"
+        >
+          <div className="flex items-center gap-4">
+            <img
+              src={`/suits/${activeShapeDemand.toLowerCase()}.svg`}
+              alt={activeShapeDemand}
+              className="w-12 h-12 filter drop-shadow-lg"
+            />
+            <div>
+              <p className="text-white font-lilitaone text-2xl drop-shadow-lg">
+                SUIT DEMANDED!
+              </p>
+              <p className="text-white font-bold text-lg">
+                Play {activeShapeDemand} cards
+              </p>
+            </div>
+            <img
+              src={`/suits/${activeShapeDemand.toLowerCase()}.svg`}
+              alt={activeShapeDemand}
+              className="w-12 h-12 filter drop-shadow-lg"
+            />
           </div>
         </div>
-        <div className="flex-1 space-y-20 pt-5 z-40 ">
-          <PlayerTwo
-            opponent={gameState.opponents[0]}
-            topCard={gameState.topCard}
-          />
-          <img src="/middle-cards.png" className="mx-auto" alt="" />
-          <PlayerOne
-            myCards={gameState.myCards}
-            isMyTurn={gameState.currentPlayerIndex === playerNumber - 1}
-            onPlayCard={(index: number) => playCard(index)}
-            onDrawCard={drawCard}
-            onCallLastCard={callLastCard}
-          />
-        </div>
-        <div className="space-y-[46px] z-40 mr-5">
-          <GamePlayersTab
-            playerNumber={playerNumber as 1 | 2}
-            gameState={gameState}
-          />
-          <DrawPile deckSize={gameState.deckSize} onDraw={drawCard} />
+      )}
+      <div className="flex-1 w-full relative overflow-visible flex gap-x-12.5 px-5">
+        <div className="min-w-max flex gap-x-12.5 w-full">
+          <div className="space-y-12 pt-10 z-40">
+            <LiveChat />
+            <div className="mt-10">
+              <Timer />
+            </div>
+          </div>
+          <div className="flex-1 space-y-20 pt-5 z-40 min-w-[600px]">
+            <PlayerTwo
+              opponent={gameState.opponents[0]}
+              topCard={gameState.topCard}
+            />
+
+            {/* Discard Pile - Shows the current card on table */}
+            <div className="mx-auto flex flex-col items-center gap-4">
+              <p className="text-white font-lilitaone text-lg">Card on Table</p>
+              {gameState.topCard ? (
+                <div className="transform scale-110 shadow-2xl">
+                  <Card
+                    suit={gameState.topCard.suit as any}
+                    value={gameState.topCard.value}
+                    isPlayable={false}
+                  />
+                </div>
+              ) : (
+                <div className="w-37.5 h-50.5 bg-white/20 rounded-2xl border-4 border-dashed border-white/50 flex items-center justify-center">
+                  <p className="text-white/50 font-bold">No cards yet</p>
+                </div>
+              )}
+              <div className="text-white/80 text-sm">
+                {gameState.deckSize} cards left in deck
+              </div>
+            </div>
+
+            <PlayerOne
+              myCards={gameState.myCards}
+              isMyTurn={
+                gameState.status === "IN_PROGRESS" &&
+                gameState.currentPlayerIndex === playerNumber - 1
+              }
+              topCard={gameState.topCard}
+              activeDemandSuit={gameState.activeShapeDemand}
+              opponentName={gameState.opponents[0]?.nickname}
+              onPlayCard={playCard}
+              onDrawCard={drawCard}
+              onCallLastCard={callLastCard}
+            />
+          </div>
+          <div className="space-y-[46px] z-40 mr-5">
+            <GamePlayersTab
+              playerNumber={playerNumber as 1 | 2}
+              gameState={gameState}
+            />
+            <DrawPile
+              deckSize={gameState.deckSize}
+              onDraw={drawCard}
+              pendingPenalty={gameState.pendingPenalty}
+            />
+          </div>
         </div>
       </div>
 
@@ -375,12 +571,12 @@ function GameClient() {
         beatTheTime={true}
         specialCardsPlayed={2}
         onReplay={() => {
-          setShowWinModal(false);
-          console.log("Replay clicked");
+          console.log("Replay clicked - Reloading game");
+          window.location.reload();
         }}
         onLobby={() => {
-          setShowWinModal(false);
-          console.log("Lobby clicked");
+          console.log("Lobby clicked - Going home");
+          window.location.href = "/";
         }}
       />
 
@@ -389,12 +585,17 @@ function GameClient() {
         onClose={() => setShowLoseModal(false)}
         reason="Your opponent won!"
         onReplay={() => {
-          setShowLoseModal(false);
-          console.log("Replay clicked");
+          console.log("Replay clicked - Clearing state and reloading");
+          // Clear localStorage to force a fresh game
+          localStorage.removeItem(`whot_player_profile_${playerNumber}`);
+          // Force a full page reload to reset all state
+          window.location.href = `/game?player=${playerNumber}`;
         }}
         onLobby={() => {
-          setShowLoseModal(false);
-          console.log("Lobby clicked");
+          console.log("Lobby clicked - Going home");
+          // Clear localStorage before going to lobby
+          localStorage.removeItem(`whot_player_profile_${playerNumber}`);
+          window.location.href = "/";
         }}
       />
     </div>

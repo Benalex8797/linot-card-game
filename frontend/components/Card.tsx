@@ -1,7 +1,7 @@
 import React from "react";
 
 interface CardProps {
-  suit: "CIRCLE" | "TRIANGLE" | "CROSS" | "STAR" | "SQUARE";
+  suit: "CIRCLE" | "TRIANGLE" | "CROSS" | "STAR" | "SQUARE" | "WHOT";
   value: string | number;
   onClick?: () => void;
   isPlayable?: boolean;
@@ -9,21 +9,23 @@ interface CardProps {
 }
 
 // Map suits to SVG file paths
-const suitImages = {
+const suitImages: Record<string, string> = {
   CIRCLE: "/suits/circle.svg",
   TRIANGLE: "/suits/triangle.svg",
   CROSS: "/suits/cross.svg",
   STAR: "/suits/star.svg",
   SQUARE: "/suits/square.svg",
+  WHOT: "/suits/circle.svg", // Whot cards don't show suit (handled separately)
 };
 
 // White versions for corner icons
-const suitImagesWhite = {
+const suitImagesWhite: Record<string, string> = {
   CIRCLE: "/suits/circle-white.svg",
   TRIANGLE: "/suits/triangle-white.svg",
   CROSS: "/suits/cross-white.svg",
   STAR: "/suits/star-white.svg",
   SQUARE: "/suits/square-white.svg",
+  WHOT: "/suits/circle-white.svg", // Whot cards don't show suit
 };
 
 export default function Card({
@@ -34,7 +36,21 @@ export default function Card({
   className = "",
 }: CardProps) {
   const redColor = "#E23A2F";
-  const isWhotCard = value === "20" || value === 20; // Special card 20
+  const isWhotCard = suit === "WHOT"; // Check suit instead of value
+
+  // Determine if this card has a special effect
+  const getSpecialEffect = () => {
+    const numValue = value.toString();
+    if (numValue === "1") return { label: "HOLD", color: "bg-blue-500" };
+    if (numValue === "2") return { label: "P2", color: "bg-orange-500" };
+    if (numValue === "5" && suit !== "STAR")
+      return { label: "P3", color: "bg-red-500" };
+    if (numValue === "14") return { label: "GM", color: "bg-purple-500" };
+    if (numValue === "20") return { label: "WILD", color: "bg-yellow-500" };
+    return null;
+  };
+
+  const specialEffect = getSpecialEffect();
 
   return (
     <div
@@ -44,7 +60,7 @@ export default function Card({
         transition-all duration-200
         ${
           isPlayable
-            ? "cursor-pointer hover:-translate-y-4 hover:shadow-2xl"
+            ? "cursor-pointer hover:-translate-y-4 hover:shadow-2xl hover:z-50"
             : "opacity-70 cursor-not-allowed"
         }
         ${className}
@@ -56,6 +72,15 @@ export default function Card({
           : "0 4px 10px rgba(0,0,0,0.15)",
       }}
     >
+      {/* Special Card Badge - Top Right */}
+      {specialEffect && (
+        <div
+          className={`absolute top-1 right-1 ${specialEffect.color} text-white px-1.5 py-0.5 rounded-md text-[10px] font-bold shadow-lg z-10`}
+        >
+          {specialEffect.label}
+        </div>
+      )}
+
       {/* Top-left red corner tab */}
       <div
         className="absolute top-0 left-0 w-8 h-16 flex flex-col items-center justify-start pt-1.5 rounded-br-2xl "

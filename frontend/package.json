@@ -8,6 +8,8 @@
     "start": "next start"
   },
   "dependencies": {
+    "@linera/client": "^0.15.8",
+    "@linera/metamask": "^0.15.8",
     "framer-motion": "^12.23.25",
     "lucide-react": "^0.556.0",
     "next": "15.1.0",

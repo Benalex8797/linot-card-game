@@ -49,8 +49,8 @@ export interface PlayerView {
   status: string;
   activeShapeDemand: string | null;
   pendingPenalty: number;
+  winnerIndex: number | null;
 }
-
 
 // Re-export Player as OpponentView for backward compatibility
 export type OpponentView = Player;
@@ -63,4 +63,3 @@ export interface UserProfile {
   playerNumber: 1 | 2;
   maxPlayers?: number;
 }
-

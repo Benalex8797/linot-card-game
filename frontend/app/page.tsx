@@ -116,7 +116,6 @@ export default function Home() {
                 <ul className="mb-5">
                   <li>1 (Hold On) skips the next player,</li>
                   <li>2 (Pick Two) and 5 (Pick Three) force draws,</li>
-                  <li>8 (Suspension) skips the next turn,</li>
                   <li>
                     14 (General Market) makes everyone except you draw, and
                   </li>
@@ -124,12 +123,11 @@ export default function Home() {
                 </ul>
 
                 <p className="mb-5">
-                  You can block any attack card by matching its number (except
-                  14), or by paying coins to protect yourself.
+                  You can block any attack card by matching its suit.
                 </p>
                 <p>
-                  Win by being the first to empty your hand or, when the timer
-                  runs out, by having the fewest cards.
+                  Win by being the first to empty your hand or, when the deck
+                  pile runs out, by having the fewest cards.
                 </p>
               </div>
             </div>
