@@ -77,8 +77,14 @@ impl Contract for LinotContract {
                 };
                 
                 // Get authenticated user
-                let creator_owner = self.runtime.authenticated_signer()
-                    .expect("Creator must be authenticated");
+                let creator_owner = match self.runtime.authenticated_signer() {
+                    Some(signer) => signer,
+                    None => {
+                        return LinotResponse::Error(
+                            "Creator must be authenticated".to_string()
+                        );
+                    }
+                };
                 
                 // SEND MESSAGE TO PLAY_CHAIN 
                 self.runtime.prepare_message(Message::RequestCreateMatch {
@@ -99,9 +105,16 @@ impl Contract for LinotContract {
                 // Check if on USER_CHAIN (has subscribed_play_chain)
                 if let Some(play_chain_id) = self.state.subscribed_play_chain.get().as_ref() {
                     // USER_CHAIN: Send message to PLAY_CHAIN
+                    let player_owner = match self.runtime.authenticated_signer() {
+                        Some(signer) => signer,
+                        None => {
+                            return LinotResponse::Error(
+                                "Signer required".to_string()
+                            );
+                        }
+                    };
                     let message = Message::StartMatchAction {
-                        player_owner: self.runtime.authenticated_signer()
-                            .expect("Signer required"),
+                        player_owner,
                     };
                     self.runtime.prepare_message(message).send_to(*play_chain_id);
                     log::info!("USER_CHAIN: Sent StartMatchAction to PLAY_CHAIN");
@@ -116,9 +129,16 @@ impl Contract for LinotContract {
             Operation::PlayCard { card_index, chosen_suit } => {
                 if let Some(play_chain_id) = self.state.subscribed_play_chain.get().as_ref() {
                     // USER_CHAIN: Send message to PLAY_CHAIN
+                    let player_owner = match self.runtime.authenticated_signer() {
+                        Some(signer) => signer,
+                        None => {
+                            return LinotResponse::Error(
+                                "Signer required".to_string()
+                            );
+                        }
+                    };
                     let message = Message::PlayCardAction {
-                        player_owner: self.runtime.authenticated_signer()
-                            .expect("Signer required"),
+                        player_owner,
                         card_index,
                         chosen_suit,
                     };
@@ -133,9 +153,16 @@ impl Contract for LinotContract {
             Operation::DrawCard => {
                 if let Some(play_chain_id) = self.state.subscribed_play_chain.get().as_ref() {
                     // USER_CHAIN: Send message to PLAY_CHAIN
+                    let player_owner = match self.runtime.authenticated_signer() {
+                        Some(signer) => signer,
+                        None => {
+                            return LinotResponse::Error(
+                                "Signer required".to_string()
+                            );
+                        }
+                    };
                     let message = Message::DrawCardAction {
-                        player_owner: self.runtime.authenticated_signer()
-                            .expect("Signer required"),
+                        player_owner,
                     };
                     self.runtime.prepare_message(message).send_to(*play_chain_id);
                     LinotResponse::Ok
@@ -145,8 +172,14 @@ impl Contract for LinotContract {
             }
 
             Operation::CallLastCard => {
-                let player_owner = self.runtime.authenticated_signer()
-                    .expect("Signer required");
+                let player_owner = match self.runtime.authenticated_signer() {
+                    Some(signer) => signer,
+                    None => {
+                        return LinotResponse::Error(
+                            "Signer required".to_string()
+                        );
+                    }
+                };
                 
                 // Determine if we're on PLAY_CHAIN or USER_CHAIN
                 if self.state.match_data.get().players.len() > 0 {
@@ -154,8 +187,14 @@ impl Contract for LinotContract {
                     self.handle_call_last_card_message(player_owner).await;
                 } else {
                     // On USER_CHAIN - send message to PLAY_CHAIN
-                    let play_chain_id = self.state.subscribed_play_chain.get()
-                        .expect("Not subscribed to any play chain");
+                    let play_chain_id = match self.state.subscribed_play_chain.get().as_ref() {
+                        Some(chain_id) => *chain_id,
+                        None => {
+                            return LinotResponse::Error(
+                                "Not subscribed to any play chain".to_string()
+                            );
+                        }
+                    };
                     
                     let message = Message::CallLastCardAction { player_owner };
                     self.runtime.prepare_message(message).send_to(play_chain_id);
@@ -164,8 +203,14 @@ impl Contract for LinotContract {
             }
             
             Operation::ChallengeLastCard { player_index } => {
-                let challenger_owner = self.runtime.authenticated_signer()
-                    .expect("Signer required");
+                let challenger_owner = match self.runtime.authenticated_signer() {
+                    Some(signer) => signer,
+                    None => {
+                        return LinotResponse::Error(
+                            "Signer required".to_string()
+                        );
+                    }
+                };
                 
                 // Determine chain type
                 if self.state.match_data.get().players.len() > 0 {
@@ -173,8 +218,14 @@ impl Contract for LinotContract {
                     self.handle_challenge_last_card_message(challenger_owner, player_index).await;
                 } else {
                     // On USER_CHAIN - send message to PLAY_CHAIN
-                    let play_chain_id = self.state.subscribed_play_chain.get()
-                        .expect("Not subscribed to any play chain");
+                    let play_chain_id = match self.state.subscribed_play_chain.get().as_ref() {
+                        Some(chain_id) => *chain_id,
+                        None => {
+                            return LinotResponse::Error(
+                                "Not subscribed to any play chain".to_string()
+                            );
+                        }
+                    };
                     
                     let message = Message::ChallengeLastCardAction {
                         challenger_owner,
@@ -256,6 +307,14 @@ impl Contract for LinotContract {
                 self.handle_request_join_message(player_owner, player_chain, nickname).await;
             }
             
+            // USER_CHAIN: Confirmation of join from PLAY_CHAIN (triggers subscribe!)
+            Message::JoinMatchConfirmed {
+                play_chain_id,
+                success,
+            } => {
+                self.handle_join_confirmed(play_chain_id, success).await;
+            }
+            
             Message::StartMatchAction { player_owner: _ } => {
                 // Player requesting to start match on PLAY_CHAIN
                 log::info!("PLAY_CHAIN: Received StartMatchAction");
@@ -325,10 +384,13 @@ impl LinotContract {
             deck.push(Card { suit: CardSuit::Whot, value: 20 });
         }
         
-        // Deterministic shuffle
+        // Fisher-Yates shuffle with system_time seed (proper randomness)
+        let seed = self.runtime.system_time().micros();
+        let mut state = seed;
         let len = deck.len();
         for i in (1..len).rev() {
-            let j = (i * 7 + 11) % (i + 1);
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let j = (state as usize) % (i + 1);
             deck.swap(i, j);
         }
         
@@ -345,6 +407,7 @@ impl LinotContract {
             deck_size,
             pending_draw_stack: 0,
             pending_draw_type: None,
+            active_demand_suit: None,
             turn_start_time: None,
             turn_duration: linot::TURN_TIMEOUT_MICROS,
         }

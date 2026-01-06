@@ -53,11 +53,14 @@ echo "Creating Player 1 wallet..."
 linera --with-wallet 1 wallet init --faucet "$LINERA_FAUCET_URL"
 
 echo "Requesting chain for Player 1..."
-USER_CHAIN_1_OUTPUT=$(linera --with-wallet 1 wallet request-chain --faucet "$LINERA_FAUCET_URL")
-mapfile -t StringArray <<<"$USER_CHAIN_1_OUTPUT"
-USER_CHAIN_1=${StringArray[0]}
+USER_CHAIN_1_OUTPUT=$(linera --with-wallet 1 wallet request-chain --faucet "$LINERA_FAUCET_URL" 2>&1)
 
-OWNER_1=$(linera --with-wallet 1 wallet show | grep "AccountOwner:" | head -1 | awk '{print $2}')
+# Extract chain ID (64-char hex on its own line)
+USER_CHAIN_1=$(echo "$USER_CHAIN_1_OUTPUT" | grep -E '^[a-f0-9]{64}$' | head -1)
+
+# Extract owner from the request-chain log output
+# Log line format: "Requesting a new chain for owner 0x<address>"
+OWNER_1=$(echo "$USER_CHAIN_1_OUTPUT" | grep -oP 'owner\s+\K0x[0-9a-f]{64}' | head -1)
 echo "Player 1 Chain: $USER_CHAIN_1"
 echo "Player 1 Owner: $OWNER_1"
 
@@ -65,24 +68,49 @@ echo "Creating Player 2 wallet..."
 linera --with-wallet 2 wallet init --faucet "$LINERA_FAUCET_URL"
 
 echo "Requesting chain for Player 2..."
-USER_CHAIN_2_OUTPUT=$(linera --with-wallet 2 wallet request-chain --faucet "$LINERA_FAUCET_URL")
-mapfile -t StringArray <<<"$USER_CHAIN_2_OUTPUT"
-USER_CHAIN_2=${StringArray[0]}
+USER_CHAIN_2_OUTPUT=$(linera --with-wallet 2 wallet request-chain --faucet "$LINERA_FAUCET_URL" 2>&1)
 
-OWNER_2=$(linera --with-wallet 2 wallet show | grep "AccountOwner:" | head -1 | awk '{print $2}')
+# Extract chain ID (64-char hex on its own line)
+USER_CHAIN_2=$(echo "$USER_CHAIN_2_OUTPUT" | grep -E '^[a-f0-9]{64}$' | head -1)
+
+# Extract owner from the request-chain log output
+# Log line format: "Requesting a new chain for owner 0x<address>"
+OWNER_2=$(echo "$USER_CHAIN_2_OUTPUT" | grep -oP 'owner\s+\K0x[0-9a-f]{64}' | head -1)
 echo "Player 2 Chain: $USER_CHAIN_2"
 echo "Player 2 Owner: $OWNER_2"
 
-# Sync wallets
-linera --with-wallet 1 sync
-linera --with-wallet 2 sync
-
-# Create shared Play Chain
+# Create shared Play Chain BEFORE sync (critical for Player 2 to discover it)
 echo "Creating shared Play Chain..."
-PLAY_CHAIN_OUTPUT=$(linera --with-wallet 1 wallet request-chain --faucet "$LINERA_FAUCET_URL")
-mapfile -t StringArray <<< "$PLAY_CHAIN_OUTPUT"
-PLAY_CHAIN=${StringArray[0]}
+PLAY_CHAIN_OUTPUT=$(linera --with-wallet 1 wallet request-chain --faucet "$LINERA_FAUCET_URL" 2>&1)
+
+# Extract chain ID (64-char hex on its own line)
+PLAY_CHAIN=$(echo "$PLAY_CHAIN_OUTPUT" | grep -E '^[a-f0-9]{64}$' | head -1)
 echo "Play Chain: $PLAY_CHAIN"
+
+# CRITICAL: Wait for network propagation (inspo pattern)
+echo "Waiting for network propagation..."
+sleep 2
+
+# Sync wallets AFTER all chains exist (ensures both wallets discover all chains)
+# Using && pattern from inspo for error checking
+echo "Syncing Player 1 wallet..."
+linera --with-wallet 1 sync && linera --with-wallet 1 query-balance
+echo "Player 1 wallet synced"
+
+echo "Syncing Player 2 wallet..."
+linera --with-wallet 2 sync && linera --with-wallet 2 query-balance  
+echo "Player 2 wallet synced"
+
+# Verify Player 2 actually tracks PLAY_CHAIN
+echo "Verifying Player 2 wallet tracking..."
+if linera --with-wallet 2 wallet show | grep -q "$PLAY_CHAIN"; then
+  echo "✓ Player 2 wallet is tracking PLAY_CHAIN"
+else
+  echo "✗ WARNING: Player 2 wallet does NOT track PLAY_CHAIN!"
+  echo "  This will cause synchronization errors during gameplay."
+fi
+
+echo "Wallet sync complete"
 
 # -----------------------------------------------------------------------------------------------------------------
 # Build Contracts
@@ -130,6 +158,26 @@ fi
 
 echo "Application deployed successfully!"
 echo "APP_ID: $APP_ID"
+
+# -----------------------------------------------------------------------------------------------------------------
+# Sync Wallets After Deployment (CRITICAL for Player 2 synchronization)
+# -----------------------------------------------------------------------------------------------------------------
+echo ""
+echo "Synchronizing wallets with deployed application..."
+
+echo "Syncing Player 1 wallet with deployed application..."
+linera --with-wallet 1 sync && linera --with-wallet 1 query-balance
+echo "Player 1 wallet synced"
+
+echo "Syncing Player 2 wallet with deployed application..."
+linera --with-wallet 2 sync && linera --with-wallet 2 query-balance
+echo "Player 2 wallet synced"
+
+echo "Waiting for synchronization to complete..."
+sleep 5
+
+echo "All wallets synchronized!"
+echo ""
 
 # -----------------------------------------------------------------------------------------------------------------
 # Build Frontend (if needed)
@@ -207,10 +255,10 @@ echo "  GraphQL Endpoint: http://localhost:$SERVICE_PORT_2/chains/$USER_CHAIN_2/
 # Start Services
 # -----------------------------------------------------------------------------------------------------------------
 echo "Starting GraphQL services..."
-linera --with-wallet 1 service --port $SERVICE_PORT_1 &
+linera --max-pending-message-bundles 100 --with-wallet 1 service --port $SERVICE_PORT_1 &
 SERVICE_PID_1=$!
 
-linera --with-wallet 2 service --port $SERVICE_PORT_2 &
+linera --max-pending-message-bundles 100 --with-wallet 2 service --port $SERVICE_PORT_2 &
 SERVICE_PID_2=$!
 
 sleep 5

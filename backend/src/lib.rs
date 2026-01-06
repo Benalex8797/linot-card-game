@@ -85,6 +85,7 @@ pub enum Operation {
 pub enum UserStatus {
     Idle,
     CreatingMatch,
+    WaitingToJoin,  // Waiting for join confirmation from PLAY_CHAIN
     InMatch,
     WaitingForPlayers,
 }
@@ -119,6 +120,12 @@ pub enum Message {
         player_owner: AccountOwner,
         player_chain: ChainId,
         nickname: String,
+    },
+    
+    /// PLAY_CHAIN -> USER_CHAIN: Confirm join was successful (triggers subscribe)
+    JoinMatchConfirmed {
+        play_chain_id: ChainId,
+        success: bool,
     },
     
     /// USER_CHAIN -> PLAY_CHAIN: Request to start the match
@@ -309,6 +316,7 @@ pub struct MatchData {
     pub pending_draw_stack: u8,        // Total cards to draw (for stacking)
     #[graphql(skip)]
     pub pending_draw_type: Option<u8>, // Value of stacking card (2 or 5)
+    pub active_demand_suit: Option<CardSuit>, // Suit chosen by last WHOT card played
     pub turn_start_time: Option<u64>,   // When current turn started (micros)
     pub turn_duration: u64,             // Turn duration in micros
 }
@@ -326,6 +334,7 @@ impl Default for MatchData {
             deck_size: 0,
             pending_draw_stack: 0,
             pending_draw_type: None,
+            active_demand_suit: None,
             turn_start_time: None,
             turn_duration: crate::TURN_TIMEOUT_MICROS,
         }

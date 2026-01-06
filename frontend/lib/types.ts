@@ -49,7 +49,17 @@ export interface PlayerView {
   status: string;
   activeShapeDemand: string | null;
   pendingPenalty: number;
+  winnerIndex: number | null;
 }
 
 // Re-export Player as OpponentView for backward compatibility
 export type OpponentView = Player;
+
+// User Profile (from registration)
+export interface UserProfile {
+  username: string;
+  avatar: string;
+  color: string;
+  playerNumber: 1 | 2;
+  maxPlayers?: number;
+}

@@ -30,7 +30,7 @@ export default function Home() {
         <img src="/title-home.svg" alt="" />
 
         <div className="mt-12 flex flex-col items-center">
-          <div className="animate-bounce-slow z-[10] animate-float animate-float-delayed">
+          <div className="animate-bounce-slow z-10 animate-float animate-float-delayed">
             <img
               src="/red-octopus.svg"
               alt="Octopus"
@@ -46,7 +46,7 @@ export default function Home() {
             <div className="absolute inset-0 bg-[#B93838] rounded-full translate-y-2"></div>
             <div className="relative bg-[#EA4C4C] px-16 py-3 rounded-full border-b-4 border-[#B93838]">
               <span className="text-[55px]/[44px] text-white drop-shadow-md">
-                play
+                connect
               </span>
             </div>
           </button>
@@ -94,7 +94,7 @@ export default function Home() {
       </div>
 
       {showSplash && (
-        <div className="fixed inset-0 bg-black/50 z-[999] flex justify-center items-center font-lilitaone">
+        <div className="fixed inset-0 bg-black/50 z-999 flex justify-center items-center font-lilitaone">
           <div className="w-[1056px] text-center">
             <div
               className="relative w-full mb-10 h-[650px] py-[62px] px-[78px]
@@ -116,7 +116,6 @@ export default function Home() {
                 <ul className="mb-5">
                   <li>1 (Hold On) skips the next player,</li>
                   <li>2 (Pick Two) and 5 (Pick Three) force draws,</li>
-                  <li>8 (Suspension) skips the next turn,</li>
                   <li>
                     14 (General Market) makes everyone except you draw, and
                   </li>
@@ -124,12 +123,11 @@ export default function Home() {
                 </ul>
 
                 <p className="mb-5">
-                  You can block any attack card by matching its number (except
-                  14), or by paying coins to protect yourself.
+                  You can block any attack card by matching its suit.
                 </p>
                 <p>
-                  Win by being the first to empty your hand or, when the timer
-                  runs out, by having the fewest cards.
+                  Win by being the first to empty your hand or, when the deck
+                  pile runs out, by having the fewest cards.
                 </p>
               </div>
             </div>

@@ -40,12 +40,35 @@ impl LinotContract {
 
         self.runtime.prepare_message(message).send_to(play_chain_id);
         
-        // Update local state
-        self.state.subscribed_play_chain.set(Some(play_chain_id));
+        // DON'T subscribe here! Will subscribe when we receive confirmation
+        // Just update local state to track we're waiting for response
         self.state.player_nickname.set(Some(nickname.clone()));
-        self.state.user_status.set(UserStatus::InMatch);
+        self.state.user_status.set(UserStatus::WaitingToJoin);
 
         log::info!("USER_CHAIN: Sent join request to play chain: {:?}", play_chain_id);
+    }
+
+    /// Handle join confirmation from PLAY_CHAIN - THIS IS WHERE WE SUBSCRIBE!
+    pub async fn handle_join_confirmed(&mut self, play_chain_id: ChainId, success: bool) {
+        if !success {
+            log::warn!("USER_CHAIN: Join was rejected by PLAY_CHAIN");
+            self.state.user_status.set(UserStatus::Idle);
+            return;
+        }
+
+        // NOW we subscribe - after PLAY_CHAIN has confirmed the join
+        let app_id = self.runtime.application_id().forget_abi();
+        self.runtime.subscribe_to_events(
+            play_chain_id,
+            app_id,
+            GAME_STREAM_NAME.into()
+        );
+
+        // Update local state
+        self.state.subscribed_play_chain.set(Some(play_chain_id));
+        self.state.user_status.set(UserStatus::InMatch);
+
+        log::info!("USER_CHAIN: ✅ Subscribed to PLAY_CHAIN {:?} after join confirmation", play_chain_id);
     }
 
     /// Process event streams from PLAY_CHAIN - THIS IS THE CRITICAL SYNC LOGIC

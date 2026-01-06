@@ -87,8 +87,23 @@ button {
   }
 }
 
+@keyframes slideDown {
+  0% {
+    transform: translate(-50%, -100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
 .animate-bubbles {
   animation: bubblesFloat 4s ease-in-out infinite;
+}
+
+.animate-slideDown {
+  animation: slideDown 0.4s ease-out forwards;
 }
 
 .animate-float {
@@ -107,4 +122,27 @@ button {
 
 .animate-shimmer {
   animation: shimmer 4s ease-in-out infinite;
+}
+
+/* Smooth scrolling for the entire app */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(119, 240, 252, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(1, 98, 111, 0.6);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(1, 98, 111, 0.8);
 }
